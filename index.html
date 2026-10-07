@@ -12,32 +12,65 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Balances Energua</title>
 <style>
-  html,body{margin:0;height:100%;background:#0d1f35;overflow:hidden}
-  iframe{position:fixed;inset:0;width:100%;height:100%;border:0;background:#f0f4f8}
-  #cargando{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font:600 15px system-ui,sans-serif;gap:14px}
+  html,body{margin:0;height:100%;background:#0d1f35}
+  #cargando{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;font:600 15px system-ui,sans-serif;gap:14px;text-align:center;padding:20px}
   #cargando img{width:84px;height:84px;border-radius:18px}
+  #cargando button{background:#f59e0b;color:#0d1f35;border:0;border-radius:10px;padding:10px 18px;font-weight:700;font-size:14px}
 </style>
 </head>
 <body>
-<div id="cargando"><img src="icon-192.png" alt=""><div>Cargando Balances Energua...</div></div>
-<!-- ============================================================
-     PEGA AQUI la URL de tu aplicacion (Implementar > Administrar implementaciones > URL de la app web,
-     la que termina en /exec)
-     ============================================================ -->
-<iframe id="app" allow="geolocation; clipboard-read; clipboard-write; camera" referrerpolicy="no-referrer-when-downgrade"></iframe>
+<div id="cargando"><img src="icon-192.png" alt=""><div id="msg">Cargando Balances Energua...</div></div>
 <script>
-  var URL_APP = 'https://script.google.com/macros/s/AKfycbwvH4fV65N5tv1KesmBTiccArgPdcpbxm3nxmpesGoK2xUvK4rfQd4MmK-yLCURTRP-Sg/exec';
-  var f = document.getElementById('app');
-  f.onload = function(){ var c = document.getElementById('cargando'); if (c) c.style.display = 'none'; };
-  f.src = URL_APP;
-  // La app avisa cuando hay una version nueva publicada: se recarga el marco con la ultima version
-  window.addEventListener('message', function(e){
-    if (e && e.data && e.data.tipo === 'be_reload') {
-      var c = document.getElementById('cargando'); if (c) { c.style.display = 'flex'; c.lastElementChild.textContent = 'Actualizando a la nueva version...'; }
-      f.src = URL_APP + (URL_APP.indexOf('?') >= 0 ? '&' : '?') + 'v=' + Date.now();
-    }
+// ============================================================
+//  CARGADOR DE LA APP (funciona con y sin señal)
+//  1. Con señal: descarga la ultima version de la app desde Apps Script y la guarda en el celular.
+//  2. Sin señal: abre la copia guardada en el celular.
+//  Los datos se envian/reciben por la API de Apps Script (doPost).
+// ============================================================
+var URL_APP = 'https://script.google.com/macros/s/AKfycbwvH4fV65N5tv1KesmBTiccArgPdcpbxm3nxmpesGoK2xUvK4rfQd4MmK-yLCURTRP-Sg/exec';
+
+if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(function(){}); }
+
+function db(){
+  return new Promise(function(ok, ko){
+    var rq = indexedDB.open('be_offline', 1);
+    rq.onupgradeneeded = function(){ rq.result.createObjectStore('kv'); };
+    rq.onsuccess = function(){ ok(rq.result); };
+    rq.onerror = function(){ ko(rq.error); };
   });
-  if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(function(){}); }
+}
+function idbGet(k){ return db().then(function(d){ return new Promise(function(ok){ var r = d.transaction('kv').objectStore('kv').get(k); r.onsuccess = function(){ ok(r.result); }; r.onerror = function(){ ok(undefined); }; }); }).catch(function(){ return undefined; }); }
+function idbSet(k, v){ return db().then(function(d){ return new Promise(function(ok){ var t = d.transaction('kv','readwrite'); t.objectStore('kv').put(v, k); t.oncomplete = function(){ ok(true); }; t.onerror = function(){ ok(false); }; }); }).catch(function(){ return false; }); }
+
+function bajarHtml(ms){
+  var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var tm = ctrl ? setTimeout(function(){ ctrl.abort(); }, ms) : null;
+  return fetch(URL_APP + '?modo=html&t=' + Date.now(), {redirect: 'follow', cache: 'no-store', signal: ctrl ? ctrl.signal : undefined})
+    .then(function(r){ if (tm) clearTimeout(tm); if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+    .then(function(t){ if (t.indexOf('BALANCES') < 0 || t.indexOf('<html') < 0) throw new Error('Respuesta inesperada'); return t; });
+}
+function abrir(html){
+  var cfg = '<script>window.BE_SHELL=true;window.BE_API=' + JSON.stringify(URL_APP) + ';<\/script>';
+  html = html.replace(/<head([^>]*)>/i, '<head$1>' + cfg);
+  document.open(); document.write(html); document.close();
+}
+function sinCopia(){
+  var hayRed = navigator.onLine !== false;
+  document.getElementById('msg').innerHTML = hayRed
+    ? 'No se pudo descargar la app para guardarla en el celular.<br><br>Puedes reintentar o abrirla en modo en linea.'
+    : 'No hay conexion y la app aun no esta guardada en este celular.<br><br>Conectate a internet una vez para descargarla.';
+  var c = document.getElementById('cargando');
+  var b = document.createElement('button'); b.textContent = 'Reintentar'; b.onclick = function(){ location.reload(); }; c.appendChild(b);
+  if (hayRed) { var a = document.createElement('button'); a.textContent = 'Abrir en modo en linea'; a.style.background = '#fff';
+    a.onclick = function(){ location.href = URL_APP; }; c.appendChild(a); }
+}
+(function iniciar(){
+  var enLinea = navigator.onLine !== false;
+  var intento = enLinea ? bajarHtml(12000).then(function(t){ idbSet('html', t); idbSet('html_ts', new Date().toISOString()); return t; }) : Promise.reject();
+  intento.catch(function(){ return idbGet('html'); }).then(function(t){
+    if (t) abrir(t); else sinCopia();
+  });
+})();
 </script>
 </body>
 </html>
