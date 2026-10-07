@@ -30,6 +30,13 @@
   var f = document.getElementById('app');
   f.onload = function(){ var c = document.getElementById('cargando'); if (c) c.style.display = 'none'; };
   f.src = URL_APP;
+  // La app avisa cuando hay una version nueva publicada: se recarga el marco con la ultima version
+  window.addEventListener('message', function(e){
+    if (e && e.data && e.data.tipo === 'be_reload') {
+      var c = document.getElementById('cargando'); if (c) { c.style.display = 'flex'; c.lastElementChild.textContent = 'Actualizando a la nueva version...'; }
+      f.src = URL_APP + (URL_APP.indexOf('?') >= 0 ? '&' : '?') + 'v=' + Date.now();
+    }
+  });
   if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(function(){}); }
 </script>
 </body>
