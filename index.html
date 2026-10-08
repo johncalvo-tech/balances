@@ -57,18 +57,23 @@ function abrir(html){
 function sinCopia(){
   var hayRed = navigator.onLine !== false;
   document.getElementById('msg').innerHTML = hayRed
-    ? 'No se pudo descargar la app para guardarla en el celular.<br><br>Puedes reintentar o abrirla en modo en linea.'
+    ? 'No se pudo descargar la app para guardarla en el celular.<br><br>Revisa la señal y toca Reintentar.'
     : 'No hay conexion y la app aun no esta guardada en este celular.<br><br>Conectate a internet una vez para descargarla.';
   var c = document.getElementById('cargando');
   var b = document.createElement('button'); b.textContent = 'Reintentar'; b.onclick = function(){ location.reload(); }; c.appendChild(b);
-  if (hayRed) { var a = document.createElement('button'); a.textContent = 'Abrir en modo en linea'; a.style.background = '#fff';
-    a.onclick = function(){ location.href = URL_APP; }; c.appendChild(a); }
+
 }
 (function iniciar(){
-  var enLinea = navigator.onLine !== false;
-  var intento = enLinea ? bajarHtml(12000).then(function(t){ idbSet('html', t); idbSet('html_ts', new Date().toISOString()); return t; }) : Promise.reject();
-  intento.catch(function(){ return idbGet('html'); }).then(function(t){
-    if (t) abrir(t); else sinCopia();
+  // APERTURA RAPIDA: si la app ya esta guardada en el celular se abre al instante (con o sin señal).
+  // La propia app descarga la version nueva en segundo plano y se reabre sola cuando haya cambios.
+  idbGet('html').then(function(t){
+    if (t) { abrir(t); return; }
+    // Primera vez en este celular: hay que descargarla
+    if (navigator.onLine === false) { sinCopia(); return; }
+    document.getElementById('msg').textContent = 'Descargando la app por primera vez...';
+    bajarHtml(30000).then(function(h){
+      return Promise.all([idbSet('html', h), idbSet('html_ts', new Date().toISOString())]).then(function(){ abrir(h); });
+    }).catch(sinCopia);
   });
 })();
 </script>
