@@ -64,6 +64,9 @@ function sinCopia(){
 
 }
 (function iniciar(){
+  // Si no hay sesion iniciada, se quita el "modo sin internet": iniciar sesion siempre necesita internet
+  // (corrige celulares que quedaron en la pantalla de ingreso con ese modo activo)
+  try { if (!localStorage.getItem('be_token') && localStorage.getItem('be_modo_off') === '1') localStorage.setItem('be_modo_off', '0'); } catch(e) {}
   // APERTURA RAPIDA: si la app ya esta guardada en el celular se abre al instante (con o sin señal).
   // La propia app descarga la version nueva en segundo plano y se reabre sola cuando haya cambios.
   idbGet('html').then(function(t){
