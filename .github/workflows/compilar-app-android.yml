@@ -31,8 +31,16 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Revisar el SDK de Android (ya viene instalado en GitHub)
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          if [ -z "$SDK" ] || [ ! -d "$SDK" ]; then echo "::error::No se encontro el SDK de Android en el servidor de GitHub"; exit 1; fi
+          ls "$SDK/platforms" || true
+          ls "$SDK/build-tools" || true
+          java -version
+          node --version
 
       - name: Script de personalizacion
         run: |
@@ -133,6 +141,8 @@ jobs:
       - name: Compilar el APK
         run: |
           cd app/android
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          echo "sdk.dir=$SDK" > local.properties
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
           cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/BalancesEnergua.apk"
