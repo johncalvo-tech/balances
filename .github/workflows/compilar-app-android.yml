@@ -112,14 +112,18 @@ jobs:
                       carpeta = os.path.join(res, 'mipmap-' + d)
                       for nombre in ('ic_launcher.png', 'ic_launcher_round.png', 'ic_launcher_foreground.png'):
                           im.resize((px, px), Image.LANCZOS).save(os.path.join(carpeta, nombre))
-              # 4) Numero de version (cada compilacion es una actualizacion valida)
+              # 4) Numero de version: SIEMPRE mayor que el anterior (minutos desde 1970).
+              #    No depende del numero de ejecucion de GitHub (que se reinicia si se cambia el flujo),
+              #    asi Android nunca lo toma como una version mas vieja y deja actualizar encima.
+              import time
               run = int(os.environ.get('GITHUB_RUN_NUMBER', '1'))
+              code = int(time.time() // 60)
               bg = os.path.join(app, 'android', 'app', 'build.gradle')
               g = open(bg, encoding='utf-8').read()
-              g = re.sub(r'versionCode \d+', 'versionCode %d' % run, g)
-              g = re.sub(r'versionName "[^"]*"', 'versionName "1.%d"' % run, g)
+              g = re.sub(r'versionCode \d+', 'versionCode %d' % code, g)
+              g = re.sub(r'versionName "[^"]*"', 'versionName "2.%d"' % run, g)
               open(bg, 'w', encoding='utf-8').write(g)
-              print('android listo, version 1.%d' % run)
+              print('android listo, versionCode %d, version 2.%d' % (code, run))
           PY
 
       - name: Crear el proyecto Android
