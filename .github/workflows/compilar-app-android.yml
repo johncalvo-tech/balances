@@ -64,7 +64,7 @@ jobs:
               s = re.sub(r"if \('serviceWorker' in navigator\)[^\n]*\n", '', s)
               s = s.replace('<link rel="manifest" href="manifest.json">', '')
               n0 = s.count('window.BE_SHELL=true;')
-              s = s.replace('window.BE_SHELL=true;', 'window.BE_SHELL=true;window.BE_NATIVO=true;')
+              s = s.replace('window.BE_SHELL=true;', 'window.BE_SHELL=true;window.BE_NATIVO=true;window.BE_SIRENA=true;')   # BE_SIRENA: este APK trae el sonido de alarma
               if n0 != 1 or 'serviceWorker' in s:
                   sys.exit('ERROR: el index.html del repositorio no es el cargador esperado')
               os.makedirs(os.path.join(app, 'www'), exist_ok=True)
@@ -74,6 +74,21 @@ jobs:
               print('cargador listo')
           elif fase == 'android':
               res = os.path.join(app, 'android', 'app', 'src', 'main', 'res')
+              # 0) Sonido de ALARMA (sirena fuerte) para el aviso de GPS apagado: res/raw/sirena.wav
+              import wave, struct, math
+              os.makedirs(os.path.join(res, 'raw'), exist_ok=True)
+              fs, dur = 22050, 6.0                       # 6 s de sirena (sube y baja 4 veces), volumen al maximo
+              w = wave.open(os.path.join(res, 'raw', 'sirena.wav'), 'w')
+              w.setnchannels(1); w.setsampwidth(2); w.setframerate(fs)
+              fase_acum, cuadros = 0.0, bytearray()
+              for i in range(int(fs * dur)):
+                  t = i / fs
+                  f = 750 + 650 * (0.5 - 0.5 * math.cos(2 * math.pi * (t % 1.5) / 1.5))   # barrido 750-1400 Hz
+                  fase_acum += 2 * math.pi * f / fs
+                  v = 1.0 if math.sin(fase_acum) >= 0 else -1.0                           # onda cuadrada: mas sonora
+                  cuadros += struct.pack('<h', int(v * 32000))
+              w.writeframes(bytes(cuadros)); w.close()
+              print('sonido de alarma listo (res/raw/sirena.wav)')
               # 1) Textos de la notificacion de seguimiento
               st = os.path.join(res, 'values', 'strings.xml')
               x = open(st, encoding='utf-8').read()
