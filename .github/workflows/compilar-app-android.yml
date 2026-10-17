@@ -1,5 +1,5 @@
 # ============================================================
-#  COMPILAR LA APP ANDROID "Balances Energua" (APK)
+#  COMPILAR LA APP ANDROID "GEMA" (APK)  (antes Balances Energua: se conserva el appId y el nombre del archivo para no perder instalaciones ni enlaces)
 #  Se ejecuta a mano: pestana Actions -> "Compilar app Android" -> Run workflow.
 #  Resultado: https://github.com/<tu-usuario>/<repositorio>/releases/download/app-android/BalancesEnergua.apk
 #  La app Android abre la misma app de siempre y ademas envia el GPS de la jornada
@@ -117,7 +117,7 @@ jobs:
           cat > capacitor.config.json <<'JSON'
           {
             "appId": "co.energua.balances",
-            "appName": "Balances Energua",
+            "appName": "GEMA",
             "webDir": "www",
             "android": { "useLegacyBridge": true }
           }
@@ -158,5 +158,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete app-android --yes --cleanup-tag || true
-          gh release create app-android BalancesEnergua.apk --title "App Android Balances Energua (version 1.${{ github.run_number }})" --notes "Descarga BalancesEnergua.apk desde el celular e instalala. Compilado el $(date -u +%Y-%m-%d)." --latest
+          gh release create app-android BalancesEnergua.apk --title "App Android GEMA (version 1.${{ github.run_number }})" --notes "Descarga BalancesEnergua.apk desde el celular e instalala. Compilado el $(date -u +%Y-%m-%d)." --latest
           echo "Enlace de descarga: https://github.com/${{ github.repository }}/releases/download/app-android/BalancesEnergua.apk"
