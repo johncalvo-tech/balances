@@ -65,7 +65,7 @@ jobs:
               s = re.sub(r"if \('serviceWorker' in navigator\)[^\n]*\n", '', s)
               s = s.replace('<link rel="manifest" href="manifest.json">', '')
               n0 = s.count('window.BE_SHELL=true;')
-              s = s.replace('window.BE_SHELL=true;', 'window.BE_SHELL=true;window.BE_NATIVO=true;window.BE_SIRENA=true;window.BE_APK_VER=6;window.BE_APK_CANAL="GEMA";')   # BE_SIRENA: trae la alarma; BE_APK_VER: version del APK (la app exige la minima)
+              s = s.replace('window.BE_SHELL=true;', 'window.BE_SHELL=true;window.BE_NATIVO=true;window.BE_SIRENA=true;window.BE_APK_VER=7;window.BE_APK_CANAL="GEMA";')   # BE_SIRENA: trae la alarma; BE_APK_VER: version del APK (la app exige la minima)
               if n0 != 1 or 'serviceWorker' in s:
                   sys.exit('ERROR: el index.html del repositorio no es el cargador esperado')
               os.makedirs(os.path.join(app, 'www'), exist_ok=True)
@@ -121,8 +121,13 @@ jobs:
               PLUGIN_JAVA = r'''
               package __PKG__;
 
+              import android.content.ComponentName;
               import android.content.Context;
+              import android.content.Intent;
               import android.net.ConnectivityManager;
+              import android.net.Uri;
+              import android.os.Build;
+              import android.os.PowerManager;
               import android.net.Network;
               import android.net.NetworkCapabilities;
               import android.provider.Settings;
@@ -171,6 +176,165 @@ jobs:
                       r.put("sim", sim);
                       call.resolve(r);
                   }
+                  // GEMA v7: bateria sin restricciones (para que Android no cierre la app al usar otras apps)
+                  @PluginMethod
+                  public void getBateria(PluginCall call) {
+                      Context ctx = getContext();
+                      boolean libre = true;
+                      try {
+                          PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
+                          if (pm != null && Build.VERSION.SDK_INT >= 23) libre = pm.isIgnoringBatteryOptimizations(ctx.getPackageName());
+                      } catch (Exception e) { }
+                      JSObject r = new JSObject();
+                      r.put("sinRestriccion", libre);
+                      r.put("marca", String.valueOf(Build.MANUFACTURER).toLowerCase());
+                      r.put("sdk", Build.VERSION.SDK_INT);
+                      call.resolve(r);
+                  }
+                  @PluginMethod
+                  public void pedirBateria(PluginCall call) {
+                      Context ctx = getContext();
+                      try {
+                          Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + ctx.getPackageName()));
+                          i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                          ctx.startActivity(i);
+                          call.resolve();
+                          return;
+                      } catch (Exception e) { }
+                      try {
+                          Intent i = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+                          i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                          ctx.startActivity(i);
+                      } catch (Exception e) { }
+                      call.resolve();
+                  }
+                  // Ajuste propio de cada marca para "inicio automatico" (Xiaomi, Huawei, Oppo, Vivo...). Si no existe: ajustes de la app.
+                  @PluginMethod
+                  public void abrirAutoinicio(PluginCall call) {
+                      Context ctx = getContext();
+                      String[][] c = {
+                          {"com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity"},
+                          {"com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"},
+                          {"com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity"},
+                          {"com.hihonor.systemmanager", "com.hihonor.systemmanager.startupmgr.ui.StartupNormalAppListActivity"},
+                          {"com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity"},
+                          {"com.coloros.safecenter", "com.coloros.safecenter.startupapp.StartupAppListActivity"},
+                          {"com.oppo.safe", "com.oppo.safe.permission.startup.StartupAppListActivity"},
+                          {"com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"},
+                          {"com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity"},
+                          {"com.oneplus.security", "com.oneplus.security.chainlaunch.view.ChainLaunchAppListActivity"},
+                          {"com.letv.android.letvsafe", "com.letv.android.letvsafe.AutobootManageActivity"},
+                          {"com.asus.mobilemanager", "com.asus.mobilemanager.MainActivity"},
+                          {"com.transsion.phonemaster", "com.cyin.himgr.autostart.AutoStartActivity"},
+                          {"com.samsung.android.lool", "com.samsung.android.sm.ui.battery.BatteryActivity"}
+                      };
+                      JSObject r = new JSObject();
+                      for (String[] x : c) {
+                          try {
+                              Intent i = new Intent();
+                              i.setComponent(new ComponentName(x[0], x[1]));
+                              i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                              if (i.resolveActivity(ctx.getPackageManager()) != null) {
+                                  ctx.startActivity(i);
+                                  r.put("abierto", true);
+                                  call.resolve(r);
+                                  return;
+                              }
+                          } catch (Exception e) { }
+                      }
+                      try {
+                          Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.getPackageName()));
+                          i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                          ctx.startActivity(i);
+                      } catch (Exception e) { }
+                      r.put("abierto", false);
+                      call.resolve(r);
+                  }
+                  // La app avisa si hay jornada abierta: se vigila que GEMA no quede cerrada (ver GuardiaReceiver)
+                  @PluginMethod
+                  public void setJornada(PluginCall call) {
+                      Context ctx = getContext();
+                      Boolean a = call.getBoolean("activa", false);
+                      boolean activa = a != null && a;
+                      ctx.getSharedPreferences("gema", Context.MODE_PRIVATE).edit().putBoolean("jornada", activa).putLong("jornada_t", System.currentTimeMillis()).apply();
+                      if (activa) GuardiaReceiver.programar(ctx); else { GuardiaReceiver.cancelar(ctx); GuardiaReceiver.quitarAviso(ctx); }
+                      call.resolve();
+                  }
+              }
+              '''
+              GUARDIA_JAVA = r'''
+              package __PKG__;
+
+              import android.app.AlarmManager;
+              import android.app.Notification;
+              import android.app.NotificationChannel;
+              import android.app.NotificationManager;
+              import android.app.PendingIntent;
+              import android.content.BroadcastReceiver;
+              import android.content.Context;
+              import android.content.Intent;
+              import android.content.SharedPreferences;
+              import android.os.Build;
+              import android.os.SystemClock;
+
+              // GEMA v7: VIGILANCIA DE LA JORNADA. Cada 10 min (y al reiniciar el celular) revisa si GEMA esta viva.
+              // Si la jornada esta abierta y la app quedo cerrada (el celular la cerro, la deslizaron, se reinicio),
+              // muestra una notificacion con sonido para volver a abrirla. ("Forzar detencion" Android no deja vigilarla.)
+              public class GuardiaReceiver extends BroadcastReceiver {
+                  static final int ID_AVISO = 7300;
+                  static final long CADA = 10L * 60L * 1000L;
+
+                  @Override
+                  public void onReceive(Context ctx, Intent intent) {
+                      SharedPreferences p = ctx.getSharedPreferences("gema", Context.MODE_PRIVATE);
+                      if (!p.getBoolean("jornada", false)) return;
+                      if (System.currentTimeMillis() - p.getLong("jornada_t", 0L) > 16L * 3600L * 1000L) { p.edit().putBoolean("jornada", false).apply(); return; }
+                      if (!MainActivity.vivo) avisar(ctx);
+                      programar(ctx);
+                  }
+                  static PendingIntent pi(Context ctx) {
+                      Intent i = new Intent(ctx, GuardiaReceiver.class);
+                      i.setAction("GEMA_GUARDIA");
+                      return PendingIntent.getBroadcast(ctx, 7301, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                  }
+                  static void programar(Context ctx) {
+                      try {
+                          AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+                          long cuando = SystemClock.elapsedRealtime() + CADA;
+                          if (Build.VERSION.SDK_INT >= 23) am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, cuando, pi(ctx));
+                          else am.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, cuando, pi(ctx));
+                      } catch (Exception e) { }
+                  }
+                  static void cancelar(Context ctx) {
+                      try { ((AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE)).cancel(pi(ctx)); } catch (Exception e) { }
+                  }
+                  static void quitarAviso(Context ctx) {
+                      try { ((NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE)).cancel(ID_AVISO); } catch (Exception e) { }
+                  }
+                  static void avisar(Context ctx) {
+                      try {
+                          NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                          if (Build.VERSION.SDK_INT >= 26) {
+                              NotificationChannel ch = new NotificationChannel("gema_guardia", "GEMA cerrada en jornada", NotificationManager.IMPORTANCE_HIGH);
+                              ch.enableVibration(true);
+                              nm.createNotificationChannel(ch);
+                          }
+                          Intent abrir = ctx.getPackageManager().getLaunchIntentForPackage(ctx.getPackageName());
+                          if (abrir == null) abrir = new Intent(ctx, MainActivity.class);
+                          abrir.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                          PendingIntent pa = PendingIntent.getActivity(ctx, 7302, abrir, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                          Notification.Builder b = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(ctx, "gema_guardia") : new Notification.Builder(ctx);
+                          String txt = "Estas en jornada y GEMA esta cerrada: no se esta registrando tu ubicacion. Toca aqui para abrirla.";
+                          b.setSmallIcon(ctx.getApplicationInfo().icon)
+                           .setContentTitle("GEMA se cerro - abrela")
+                           .setContentText(txt)
+                           .setStyle(new Notification.BigTextStyle().bigText(txt))
+                           .setContentIntent(pa)
+                           .setAutoCancel(true);
+                          if (Build.VERSION.SDK_INT < 26) { b.setPriority(Notification.PRIORITY_HIGH); b.setDefaults(Notification.DEFAULT_ALL); }
+                          nm.notify(ID_AVISO, b.build());
+                      } catch (Exception e) { }
+                  }
               }
               '''
               MAIN_JAVA = r'''
@@ -180,10 +344,31 @@ jobs:
               import com.getcapacitor.BridgeActivity;
 
               public class MainActivity extends BridgeActivity {
+                  // GEMA v7: la vigilancia de la jornada sabe si la app esta abierta
+                  public static volatile boolean vivo = false;
+
                   @Override
                   public void onCreate(Bundle savedInstanceState) {
-                      registerPlugin(EstadoRedPlugin.class);   // GEMA: modo avion / datos apagados
+                      registerPlugin(EstadoRedPlugin.class);   // GEMA: modo avion / datos apagados / bateria / jornada
                       super.onCreate(savedInstanceState);
+                      vivo = true;
+                      GuardiaReceiver.quitarAviso(this);
+                  }
+                  @Override
+                  public void onResume() {
+                      super.onResume();
+                      vivo = true;
+                      GuardiaReceiver.quitarAviso(this);
+                  }
+                  @Override
+                  public void onDestroy() {
+                      boolean cambio = isChangingConfigurations();
+                      super.onDestroy();
+                      if (cambio) return;   // solo girar la pantalla
+                      vivo = false;
+                      try {
+                          if (getSharedPreferences("gema", MODE_PRIVATE).getBoolean("jornada", false)) GuardiaReceiver.avisar(this);   // la cerraron en jornada
+                      } catch (Exception e) { }
                   }
               }
               '''
@@ -195,11 +380,17 @@ jobs:
               pkg = re.search(r'^package\s+([\w.]+);', open(main_path, encoding='utf-8').read(), re.M).group(1)
               open(main_path, 'w', encoding='utf-8').write(MAIN_JAVA.replace('__PKG__', pkg))
               open(os.path.join(os.path.dirname(main_path), 'EstadoRedPlugin.java'), 'w', encoding='utf-8').write(PLUGIN_JAVA.replace('__PKG__', pkg))
+              open(os.path.join(os.path.dirname(main_path), 'GuardiaReceiver.java'), 'w', encoding='utf-8').write(GUARDIA_JAVA.replace('__PKG__', pkg))
               man = os.path.join(app, 'android', 'app', 'src', 'main', 'AndroidManifest.xml')
               mt = open(man, encoding='utf-8').read()
-              if 'ACCESS_NETWORK_STATE' not in mt:
-                  mt = mt.replace('<application', '<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <application', 1)
-                  open(man, 'w', encoding='utf-8').write(mt)
+              for perm in ('ACCESS_NETWORK_STATE', 'REQUEST_IGNORE_BATTERY_OPTIMIZATIONS', 'RECEIVE_BOOT_COMPLETED', 'POST_NOTIFICATIONS', 'WAKE_LOCK'):
+                  if 'android.permission.' + perm + '"' not in mt:
+                      mt = mt.replace('<application', '<uses-permission android:name="android.permission.' + perm + '" />\n    <application', 1)
+              if 'GuardiaReceiver' not in mt:   # vigilancia de la jornada (alarma cada 10 min y al reiniciar el celular)
+                  mt = mt.replace('</application>', '    <receiver android:name="' + pkg + '.GuardiaReceiver" android:exported="true">\n'
+                                  '            <intent-filter>\n                <action android:name="android.intent.action.BOOT_COMPLETED" />\n'
+                                  '                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />\n            </intent-filter>\n        </receiver>\n    </application>', 1)
+              open(man, 'w', encoding='utf-8').write(mt)
               print('complemento EstadoRed listo (' + pkg + ')')
               # 3c) Ahorro de bateria en el complemento de ubicacion: distanceFilter = 1 activa el MODO AHORRO
               #     (actividad/parada: ubicacion aproximada por red cada 2 min, sin encender el GPS; mantiene viva la app).
