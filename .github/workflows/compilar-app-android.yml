@@ -126,6 +126,7 @@ jobs:
               import android.net.Network;
               import android.net.NetworkCapabilities;
               import android.provider.Settings;
+              import android.telephony.TelephonyManager;
               import com.getcapacitor.JSObject;
               import com.getcapacitor.Plugin;
               import com.getcapacitor.PluginCall;
@@ -141,7 +142,16 @@ jobs:
                       boolean avion = false, wifi = false, celular = false, internet = false;
                       int datos = -1;
                       try { avion = Settings.Global.getInt(ctx.getContentResolver(), Settings.Global.AIRPLANE_MODE_ON, 0) != 0; } catch (Exception e) { }
-                      try { datos = Settings.Global.getInt(ctx.getContentResolver(), "mobile_data", -1); } catch (Exception e) { }
+                      boolean sim = false;
+                      try {
+                          // datos moviles del SIM de datos (interruptor del usuario); en celulares de 2 SIM es el mas fiable
+                          TelephonyManager tm = (TelephonyManager) ctx.getSystemService(Context.TELEPHONY_SERVICE);
+                          if (tm != null) {
+                              sim = tm.getSimState() == TelephonyManager.SIM_STATE_READY;
+                              if (android.os.Build.VERSION.SDK_INT >= 26) datos = tm.isDataEnabled() ? 1 : 0;
+                          }
+                      } catch (Exception e) { }
+                      if (datos == -1) { try { datos = Settings.Global.getInt(ctx.getContentResolver(), "mobile_data", -1); } catch (Exception e) { } }
                       try {
                           ConnectivityManager cm = (ConnectivityManager) ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
                           Network n = cm != null ? cm.getActiveNetwork() : null;
@@ -158,6 +168,7 @@ jobs:
                       r.put("wifi", wifi);
                       r.put("celular", celular);
                       r.put("internet", internet);
+                      r.put("sim", sim);
                       call.resolve(r);
                   }
               }
@@ -480,7 +491,8 @@ jobs:
             echo "$LLAVE" | base64 -d > ~/.android/debug.keystore
             echo "Usando la llave guardada en el secreto ANDROID_KEYSTORE"
           else
-            echo "::warning::No existe el secreto ANDROID_KEYSTORE: se usa una llave temporal (para actualizar habra que desinstalar la app)."
+            echo "::error::No existe el secreto ANDROID_KEYSTORE. Sin la llave de siempre el APK no se podria instalar encima del anterior. Se detiene la compilacion."
+            exit 1
           fi
 
       - name: Compilar el APK
