@@ -1,7 +1,8 @@
 # ============================================================
 #  COMPILAR LA APP ANDROID "GEMA" (APK)  (antes Balances Energua: se conserva el appId y el nombre del archivo para no perder instalaciones ni enlaces)
 #  Se ejecuta a mano: pestana Actions -> "Compilar app Android" -> Run workflow.
-#  Resultado: https://github.com/<tu-usuario>/<repositorio>/releases/download/app-android/BalancesEnergua.apk
+#  Resultado: https://github.com/<tu-usuario>/<repositorio>/releases/download/app-android/GEMA.apk
+#  (tambien se publica como BalancesEnergua.apk para que los enlaces viejos sigan funcionando)
 #  La app Android abre la misma app de siempre y ademas envia el GPS de la jornada
 #  con el celular bloqueado (servicio en segundo plano con notificacion fija).
 # ============================================================
@@ -164,18 +165,19 @@ jobs:
           echo "sdk.dir=$SDK" > local.properties
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
-          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/BalancesEnergua.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/GEMA.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/BalancesEnergua.apk"   # mismo archivo, nombre anterior (enlaces viejos)
 
       - name: Guardar el APK como archivo de la ejecucion
         uses: actions/upload-artifact@v4
         with:
-          name: BalancesEnergua-apk
-          path: BalancesEnergua.apk
+          name: GEMA-apk
+          path: GEMA.apk
 
       - name: Publicar el APK (enlace fijo para descargar desde el celular)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete app-android --yes --cleanup-tag || true
-          gh release create app-android BalancesEnergua.apk --title "App Android GEMA (version 1.${{ github.run_number }})" --notes "Descarga BalancesEnergua.apk desde el celular e instalala. Compilado el $(date -u +%Y-%m-%d)." --latest
-          echo "Enlace de descarga: https://github.com/${{ github.repository }}/releases/download/app-android/BalancesEnergua.apk"
+          gh release create app-android GEMA.apk BalancesEnergua.apk --title "App Android GEMA (version 2.${{ github.run_number }})" --notes "Descarga GEMA.apk desde el celular e instalala encima de la app actual. Compilado el $(date -u +%Y-%m-%d)." --latest
+          echo "Enlace de descarga: https://github.com/${{ github.repository }}/releases/download/app-android/GEMA.apk"
