@@ -65,7 +65,7 @@ jobs:
               s = re.sub(r"if \('serviceWorker' in navigator\)[^\n]*\n", '', s)
               s = s.replace('<link rel="manifest" href="manifest.json">', '')
               n0 = s.count('window.BE_SHELL=true;')
-              s = s.replace('window.BE_SHELL=true;', 'window.BE_SHELL=true;window.BE_NATIVO=true;window.BE_SIRENA=true;window.BE_APK_VER=4;window.BE_APK_CANAL="GEMA";')   # BE_SIRENA: trae la alarma; BE_APK_VER: version del APK (la app exige la minima)
+              s = s.replace('window.BE_SHELL=true;', 'window.BE_SHELL=true;window.BE_NATIVO=true;window.BE_SIRENA=true;window.BE_APK_VER=5;window.BE_APK_CANAL="GEMA";')   # BE_SIRENA: trae la alarma; BE_APK_VER: version del APK (la app exige la minima)
               if n0 != 1 or 'serviceWorker' in s:
                   sys.exit('ERROR: el index.html del repositorio no es el cargador esperado')
               os.makedirs(os.path.join(app, 'www'), exist_ok=True)
@@ -117,6 +117,79 @@ jobs:
                       carpeta = os.path.join(res, 'mipmap-' + d)
                       for nombre in ('ic_launcher.png', 'ic_launcher_round.png', 'ic_launcher_foreground.png'):
                           im.resize((px, px), Image.LANCZOS).save(os.path.join(carpeta, nombre))
+              # 3b) Complemento nativo EstadoRed (modo avion / datos moviles) y permiso para leer el estado de la red
+              PLUGIN_JAVA = r'''
+              package __PKG__;
+
+              import android.content.Context;
+              import android.net.ConnectivityManager;
+              import android.net.Network;
+              import android.net.NetworkCapabilities;
+              import android.provider.Settings;
+              import com.getcapacitor.JSObject;
+              import com.getcapacitor.Plugin;
+              import com.getcapacitor.PluginCall;
+              import com.getcapacitor.PluginMethod;
+              import com.getcapacitor.annotation.CapacitorPlugin;
+
+              // GEMA: estado de la conexion del celular (modo avion, datos moviles, wifi) para la alarma de la jornada
+              @CapacitorPlugin(name = "EstadoRed")
+              public class EstadoRedPlugin extends Plugin {
+                  @PluginMethod
+                  public void getEstado(PluginCall call) {
+                      Context ctx = getContext();
+                      boolean avion = false, wifi = false, celular = false, internet = false;
+                      int datos = -1;
+                      try { avion = Settings.Global.getInt(ctx.getContentResolver(), Settings.Global.AIRPLANE_MODE_ON, 0) != 0; } catch (Exception e) { }
+                      try { datos = Settings.Global.getInt(ctx.getContentResolver(), "mobile_data", -1); } catch (Exception e) { }
+                      try {
+                          ConnectivityManager cm = (ConnectivityManager) ctx.getSystemService(Context.CONNECTIVITY_SERVICE);
+                          Network n = cm != null ? cm.getActiveNetwork() : null;
+                          NetworkCapabilities nc = (cm != null && n != null) ? cm.getNetworkCapabilities(n) : null;
+                          if (nc != null) {
+                              wifi = nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI);
+                              celular = nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR);
+                              internet = nc.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+                          }
+                      } catch (Exception e) { }
+                      JSObject r = new JSObject();
+                      r.put("avion", avion);
+                      r.put("datos", datos);
+                      r.put("wifi", wifi);
+                      r.put("celular", celular);
+                      r.put("internet", internet);
+                      call.resolve(r);
+                  }
+              }
+              '''
+              MAIN_JAVA = r'''
+              package __PKG__;
+
+              import android.os.Bundle;
+              import com.getcapacitor.BridgeActivity;
+
+              public class MainActivity extends BridgeActivity {
+                  @Override
+                  public void onCreate(Bundle savedInstanceState) {
+                      registerPlugin(EstadoRedPlugin.class);   // GEMA: modo avion / datos apagados
+                      super.onCreate(savedInstanceState);
+                  }
+              }
+              '''
+              base_java = os.path.join(app, 'android', 'app', 'src', 'main', 'java')
+              main_path = None
+              for dp, dn, fn in os.walk(base_java):
+                  if 'MainActivity.java' in fn: main_path = os.path.join(dp, 'MainActivity.java')
+              if not main_path: sys.exit('ERROR: no se encontro MainActivity.java')
+              pkg = re.search(r'^package\s+([\w.]+);', open(main_path, encoding='utf-8').read(), re.M).group(1)
+              open(main_path, 'w', encoding='utf-8').write(MAIN_JAVA.replace('__PKG__', pkg))
+              open(os.path.join(os.path.dirname(main_path), 'EstadoRedPlugin.java'), 'w', encoding='utf-8').write(PLUGIN_JAVA.replace('__PKG__', pkg))
+              man = os.path.join(app, 'android', 'app', 'src', 'main', 'AndroidManifest.xml')
+              mt = open(man, encoding='utf-8').read()
+              if 'ACCESS_NETWORK_STATE' not in mt:
+                  mt = mt.replace('<application', '<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <application', 1)
+                  open(man, 'w', encoding='utf-8').write(mt)
+              print('complemento EstadoRed listo (' + pkg + ')')
               # 4) Numero de version: SIEMPRE mayor que el anterior (minutos desde 1970).
               #    No depende del numero de ejecucion de GitHub (que se reinicia si se cambia el flujo),
               #    asi Android nunca lo toma como una version mas vieja y deja actualizar encima.
