@@ -65,7 +65,7 @@ jobs:
               s = re.sub(r"if \('serviceWorker' in navigator\)[^\n]*\n", '', s)
               s = s.replace('<link rel="manifest" href="manifest.json">', '')
               n0 = s.count('window.BE_SHELL=true;')
-              s = s.replace('window.BE_SHELL=true;', 'window.BE_SHELL=true;window.BE_NATIVO=true;window.BE_SIRENA=true;window.BE_APK_VER=5;window.BE_APK_CANAL="GEMA";')   # BE_SIRENA: trae la alarma; BE_APK_VER: version del APK (la app exige la minima)
+              s = s.replace('window.BE_SHELL=true;', 'window.BE_SHELL=true;window.BE_NATIVO=true;window.BE_SIRENA=true;window.BE_APK_VER=6;window.BE_APK_CANAL="GEMA";')   # BE_SIRENA: trae la alarma; BE_APK_VER: version del APK (la app exige la minima)
               if n0 != 1 or 'serviceWorker' in s:
                   sys.exit('ERROR: el index.html del repositorio no es el cargador esperado')
               os.makedirs(os.path.join(app, 'www'), exist_ok=True)
@@ -201,6 +201,23 @@ jobs:
                   mt = mt.replace('<application', '<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n    <application', 1)
                   open(man, 'w', encoding='utf-8').write(mt)
               print('complemento EstadoRed listo (' + pkg + ')')
+              # 3c) Ahorro de bateria en el complemento de ubicacion: distanceFilter = 1 activa el MODO AHORRO
+              #     (actividad/parada: ubicacion aproximada por red cada 2 min, sin encender el GPS; mantiene viva la app).
+              #     En desplazamiento (distanceFilter 40): GPS preciso cada 2 s (antes cada 1 s).
+              bg = os.path.join(app, 'node_modules', '@capacitor-community', 'background-geolocation', 'android', 'src', 'main', 'java', 'com', 'equimaps', 'capacitor_background_geolocation', 'BackgroundGeolocationService.java')
+              if not os.path.exists(bg): sys.exit('ERROR: no se encontro BackgroundGeolocationService.java del complemento de ubicacion')
+              src_bg = open(bg, encoding='utf-8').read()
+              viejo_bg = ('locationRequest.setMaxWaitTime(1000);\n            locationRequest.setInterval(1000);\n'
+                          '            locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);\n            locationRequest.setSmallestDisplacement(distanceFilter);')
+              nuevo_bg = ('if (distanceFilter > 0.5f && distanceFilter < 1.5f) {   // GEMA: modo ahorro\n'
+                          '                locationRequest.setInterval(120000);\n                locationRequest.setFastestInterval(60000);\n'
+                          '                locationRequest.setMaxWaitTime(120000);\n                locationRequest.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);\n'
+                          '                locationRequest.setSmallestDisplacement(0f);\n            } else {\n'
+                          '                locationRequest.setMaxWaitTime(2000);\n                locationRequest.setInterval(2000);\n                locationRequest.setFastestInterval(1000);\n'
+                          '                locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);\n                locationRequest.setSmallestDisplacement(distanceFilter);\n            }')
+              if viejo_bg not in src_bg: sys.exit('ERROR: el complemento de ubicacion cambio; revisar el ajuste de bateria')
+              open(bg, 'w', encoding='utf-8').write(src_bg.replace(viejo_bg, nuevo_bg))
+              print('ahorro de bateria aplicado al complemento de ubicacion')
               # 4) Numero de version: SIEMPRE mayor que el anterior (minutos desde 1970).
               #    No depende del numero de ejecucion de GitHub (que se reinicia si se cambia el flujo),
               #    asi Android nunca lo toma como una version mas vieja y deja actualizar encima.
