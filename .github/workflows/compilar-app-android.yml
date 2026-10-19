@@ -2,7 +2,7 @@
 #  COMPILAR LA APP ANDROID "GEMA" (APK)  (antes Balances Energua: se conserva el appId y el nombre del archivo para no perder instalaciones ni enlaces)
 #  Se ejecuta a mano: pestana Actions -> "Compilar app Android" -> Run workflow.
 #  Resultado: https://github.com/<tu-usuario>/<repositorio>/releases/download/app-android/GEMA.apk
-#  (tambien se publica como BalancesEnergua.apk para que los enlaces viejos sigan funcionando)
+#  UNICO enlace valido. La app solo acepta los APK compilados por este archivo (marca BE_APK_CANAL=GEMA, version 4).
 #  La app Android abre la misma app de siempre y ademas envia el GPS de la jornada
 #  con el celular bloqueado (servicio en segundo plano con notificacion fija).
 # ============================================================
@@ -65,7 +65,7 @@ jobs:
               s = re.sub(r"if \('serviceWorker' in navigator\)[^\n]*\n", '', s)
               s = s.replace('<link rel="manifest" href="manifest.json">', '')
               n0 = s.count('window.BE_SHELL=true;')
-              s = s.replace('window.BE_SHELL=true;', 'window.BE_SHELL=true;window.BE_NATIVO=true;window.BE_SIRENA=true;window.BE_APK_VER=3;')   # BE_SIRENA: trae la alarma; BE_APK_VER: version del APK (la app exige la minima)
+              s = s.replace('window.BE_SHELL=true;', 'window.BE_SHELL=true;window.BE_NATIVO=true;window.BE_SIRENA=true;window.BE_APK_VER=4;window.BE_APK_CANAL="GEMA";')   # BE_SIRENA: trae la alarma; BE_APK_VER: version del APK (la app exige la minima)
               if n0 != 1 or 'serviceWorker' in s:
                   sys.exit('ERROR: el index.html del repositorio no es el cargador esperado')
               os.makedirs(os.path.join(app, 'www'), exist_ok=True)
@@ -418,18 +418,11 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
           cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/GEMA.apk"
-          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/BalancesEnergua.apk"   # mismo archivo, nombre anterior (enlaces viejos)
-
-      - name: Guardar el APK como archivo de la ejecucion
-        uses: actions/upload-artifact@v4
-        with:
-          name: GEMA-apk
-          path: GEMA.apk
 
       - name: Publicar el APK (enlace fijo para descargar desde el celular)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete app-android --yes --cleanup-tag || true
-          gh release create app-android GEMA.apk BalancesEnergua.apk --title "App Android GEMA (version 2.${{ github.run_number }})" --notes "Descarga GEMA.apk desde el celular e instalala encima de la app actual. Compilado el $(date -u +%Y-%m-%d)." --latest
+          gh release create app-android GEMA.apk --title "App Android GEMA (version 2.${{ github.run_number }})" --notes "Descarga GEMA.apk desde el celular e instalala encima de la app actual. Compilado el $(date -u +%Y-%m-%d)." --latest
           echo "Enlace de descarga: https://github.com/${{ github.repository }}/releases/download/app-android/GEMA.apk"
