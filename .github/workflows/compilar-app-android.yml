@@ -64,7 +64,7 @@ jobs:
               s = re.sub(r"if \('serviceWorker' in navigator\)[^\n]*\n", '', s)
               s = s.replace('<link rel="manifest" href="manifest.json">', '')
               n0 = s.count('window.BE_SHELL=true;')
-              s = s.replace('window.BE_SHELL=true;', 'window.BE_SHELL=true;window.BE_NATIVO=true;window.BE_SIRENA=true;window.BE_APK_VER=2;')   # BE_SIRENA: trae la alarma; BE_APK_VER: version del APK (la app exige la minima)
+              s = s.replace('window.BE_SHELL=true;', 'window.BE_SHELL=true;window.BE_NATIVO=true;window.BE_SIRENA=true;window.BE_APK_VER=3;')   # BE_SIRENA: trae la alarma; BE_APK_VER: version del APK (la app exige la minima)
               if n0 != 1 or 'serviceWorker' in s:
                   sys.exit('ERROR: el index.html del repositorio no es el cargador esperado')
               os.makedirs(os.path.join(app, 'www'), exist_ok=True)
