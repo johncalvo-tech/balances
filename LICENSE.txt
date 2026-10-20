@@ -1,0 +1,15 @@
+GEMA - Gestion Empresarial y Monitoreo Avanzado
+Copyright (c) 2026 John Jairo Calvo Castano. Todos los derechos reservados.
+
+Este repositorio y todo su contenido (codigo, archivos de compilacion, imagenes, logotipos
+y documentacion) son SOFTWARE PROPIETARIO Y CONFIDENCIAL.
+
+NO se concede ninguna licencia. Queda prohibido, sin autorizacion previa y escrita del titular:
+copiar, reproducir, distribuir, publicar, modificar, adaptar, traducir, descompilar, hacer
+ingenieria inversa, sublicenciar, vender o usar este software o cualquier parte de el.
+
+Que el repositorio sea visible publicamente NO otorga ningun derecho de uso.
+Protegido por la Ley 23 de 1982, la Decision Andina 351 de 1993 y demas normas sobre
+derechos de autor aplicables.
+
+Contacto para licencias: [CORREO DEL TITULAR]
