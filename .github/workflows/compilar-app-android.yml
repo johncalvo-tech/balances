@@ -911,6 +911,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # GEMA: apk.json dice que version del APK esta publicada; la app OBLIGA a tenerla (solo funciona la ultima)
+          VER=$(grep -o 'BE_APK_VER=[0-9]*' .github/workflows/compilar-app-android.yml | head -1 | cut -d= -f2)
+          echo "{\"apk\": ${VER:-0}, \"compilado\": \"$(date -u +%Y-%m-%dT%H:%MZ)\"}" > apk.json
+          cat apk.json
           gh release delete app-android --yes --cleanup-tag || true
-          gh release create app-android GEMA.apk --title "App Android GEMA (version 2.${{ github.run_number }})" --notes "Descarga GEMA.apk desde el celular e instalala encima de la app actual. Compilado el $(date -u +%Y-%m-%d)." --latest
+          gh release create app-android GEMA.apk apk.json --title "App Android GEMA (version 2.${{ github.run_number }})" --notes "Descarga GEMA.apk desde el celular e instalala encima de la app actual. Compilado el $(date -u +%Y-%m-%d)." --latest
           echo "Enlace de descarga: https://github.com/${{ github.repository }}/releases/download/app-android/GEMA.apk"
